@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="te">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>కంపాస్ · Compass</title>
+<style>
+  :root{--bg:#101114;--card:#1a1c21;--line:#2c2f37;--fg:#f2f2f2;--accent:#ffe600;--mute:#9a9aa3;--good:#6fd08c;--bad:#ff7b72}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,'Noto Sans Telugu','Gautami',sans-serif}
+  body{display:flex;flex-direction:column;align-items:center;gap:14px;
+       padding:calc(env(safe-area-inset-top) + 14px) 14px calc(env(safe-area-inset-bottom) + 20px);min-height:100%}
+  #wrap{position:relative;width:min(80vw,46vh);aspect-ratio:1;flex:none}
+  #dial{width:100%;height:100%;display:block;user-select:none}
+  .read{text-align:center}
+  #deg{font-size:42px;font-weight:700;line-height:1}
+  #dir{font-size:22px;color:var(--accent);margin-top:4px}
+  #acc{font-size:13px;font-weight:600;text-align:center;min-height:16px;margin-top:-6px}
+  #acc.l3{color:var(--good)} #acc.l2{color:#ffd166} #acc.l1,#acc.l0{color:var(--bad)}
+  #msg{font-size:13px;color:var(--mute);text-align:center;min-height:16px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+  button{background:#23252b;color:var(--fg);border:1px solid #3a3d46;border-radius:999px;padding:9px 16px;font-size:14px}
+  button:active{background:#33363e}
+  button.on{background:var(--accent);color:#111;border-color:var(--accent);font-weight:600}
+  #chips{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;width:100%;max-width:460px}
+  #chips button{padding:8px 2px;font-size:14px;border-radius:10px}
+  #chips button small{display:block;font-size:10px;font-weight:400;opacity:.75;margin-top:1px}
+  #card{width:100%;max-width:460px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px}
+  #card h2{margin:0 0 2px;font-size:18px}
+  #card .sub{color:var(--mute);font-size:13px;margin-bottom:12px}
+  #card h3{margin:12px 0 6px;font-size:13px;letter-spacing:.5px;text-transform:uppercase}
+  #card h3.g{color:var(--good)} #card h3.b{color:var(--bad)}
+  #card ul{margin:0;padding-left:20px;line-height:1.55;font-size:15px}
+  .note{font-size:11px;color:var(--mute);text-align:center;max-width:460px}
+</style>
+</head>
+<body>
+  <div class="row">
+    <button id="lang">తెలుగు / English</button>
+  </div>
+  <div id="wrap">
+    <svg id="dial" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="compass">
+      <defs>
+        <linearGradient id="ring" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f05a5a"/><stop offset=".5" stop-color="#9a1c22"/><stop offset="1" stop-color="#ef4f4f"/></linearGradient>
+        <radialGradient id="disc"><stop offset="0" stop-color="#4a4a4d"/><stop offset="1" stop-color="#0f0f11"/></radialGradient>
+        <linearGradient id="sil" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#b9bcc2"/></linearGradient>
+      </defs>
+      <g id="rot"></g>
+      <polygon points="188,1 212,1 200,26" fill="#ffe600" stroke="#000" stroke-opacity=".5"/>
+    </svg>
+  </div>
+  <div class="read"><div id="deg">0°</div><div id="dir">N</div></div>
+  <div id="acc"></div>
+  <div id="msg"></div>
+
+  <div id="chips"></div>
+
+  <div id="card">
+    <h2 id="vTitle"></h2>
+    <div class="sub" id="vSub"></div>
+    <h3 class="g" id="hGood"></h3><ul id="vGood"></ul>
+    <h3 class="b" id="hAvoid"></h3><ul id="vAvoid"></ul>
+  </div>
+
+  <div class="note" id="note"></div>
+
+<script>
+(function(){
+  var $=function(id){return document.getElementById(id);};
+  var dial=$('dial'),degEl=$('deg'),dirEl=$('dir'),msg=$('msg'),accEl=$('acc'),langBtn=$('lang'),chips=$('chips');
+
+  var NAMES={
+    en:['N','NE','E','SE','S','SW','W','NW'],
+    te:['ఉత్తరం','ఈశాన్యం','తూర్పు','ఆగ్నేయం','దక్షిణం','నైరుతి','పశ్చిమం','వాయవ్యం']
+  };
+
+  // Traditional Vastu Shastra guidance, index 0..7 = N, NE, E, SE, S, SW, W, NW
+  var VASTU={
+    en:{
+      ui:{good:'Best used for',avoid:'Avoid',live:'Live',note:'Traditional Vastu guidance, for general reference only.',
+          tap:'Tap anywhere to enable the compass.',acc:'Accuracy',accL:['Unreliable – move in a figure-8','Low','Medium','High'],hold:'Hold the phone flat. Move in a figure-8 to calibrate.',
+          nodata:'No compass sensor data. Check permissions / sensor.',denied:'Sensor permission denied.',permErr:'Sensor permission error.'},
+      d:[
+        {t:'North – Kubera',s:'Wealth and opportunities · Element: Water',
+         g:['Living room / drawing room','Main entrance','Cash locker or safe (opening to the north)','Study and work area','Balcony and open space'],
+         a:['Toilet or septic tank','Heavy storage or clutter','Blocking the area with tall objects']},
+        {t:'North-East – Ishana',s:'Most sacred corner · Element: Water · Lord Shiva / Jupiter',
+         g:['Pooja room and meditation','Water source: well, tank, purifier','Main entrance','Open balcony or garden','Light, clean living area'],
+         a:['Toilet','Kitchen','Heavy items or staircase','Dustbin or clutter']},
+        {t:'East – Indra',s:'Health, energy, new beginnings · Element: Sun',
+         g:['Main entrance','Living room','Study room','Large windows for morning light','Children\'s room'],
+         a:['Toilet','Thick, closed walls','Heavy storage']},
+        {t:'South-East – Agni',s:'Fire and energy · Element: Fire',
+         g:['Kitchen (cook facing east)','Electrical panel and meter','Inverter, generator, boiler','Gas and heating appliances'],
+         a:['Bedroom','Pooja room','Water tank or borewell','Main entrance']},
+        {t:'South – Yama',s:'Stability and rest · Element: Earth',
+         g:['Bedroom','Heavy furniture and storage','Staircase','Tall trees outside'],
+         a:['Main entrance','Water storage or borewell','Pooja room','Large windows or openings']},
+        {t:'South-West – Nirriti',s:'Stability and strength · Element: Earth',
+         g:['Master bedroom','Heavy almirah and furniture','Valuables locker','Owner\'s seat in an office','Overhead water tank'],
+         a:['Toilet','Kitchen','Main entrance','Pooja room','Borewell or underground water','Cut or missing corner']},
+        {t:'West – Varuna',s:'Gains and profit · Element: Water / Space',
+         g:['Dining room','Children\'s room and study','Staircase','Toilet or bathroom','Overhead water tank'],
+         a:['Borewell or underground tank','Too many openings','Main entrance (not ideal)']},
+        {t:'North-West – Vayu',s:'Movement and support · Element: Air',
+         g:['Guest room','Garage or vehicle parking','Grain and store room','Toilet or laundry','Bedroom for guests or daughters'],
+         a:['Master bedroom','Pooja room','Cash locker']}
+      ]
+    },
+    te:{
+      ui:{good:'వీటికి ఉత్తమం',avoid:'వీటిని నివారించండి',live:'లైవ్',note:'సంప్రదాయ వాస్తు మార్గదర్శకం, సాధారణ సమాచారం కోసం మాత్రమే.',
+          tap:'కంపాస్ ఆన్ చేయడానికి స్క్రీన్‌పై ఎక్కడైనా తాకండి.',acc:'ఖచ్చితత్వం',accL:['నమ్మదగనిది – 8 ఆకారంలో తిప్పండి','తక్కువ','మధ్యస్థం','ఎక్కువ'],
+          hold:'ఫోన్‌ను సమతలంగా పట్టుకోండి. కాలిబ్రేట్ చేయడానికి 8 ఆకారంలో కదపండి.',
+          nodata:'కంపాస్ సెన్సార్ డేటా లేదు. అనుమతులు / సెన్సార్ తనిఖీ చేయండి.',denied:'సెన్సార్ అనుమతి నిరాకరించబడింది.',permErr:'సెన్సార్ అనుమతి లోపం.'},
+      d:[
+        {t:'ఉత్తరం – కుబేరుడు',s:'ధనం మరియు అవకాశాలు · తత్త్వం: జలం',
+         g:['హాలు / డ్రాయింగ్ రూమ్','ప్రధాన ద్వారం','నగదు లాకర్ / సేఫ్ (ఉత్తరం వైపు తెరుచుకునేది)','చదువు మరియు పని ప్రదేశం','బాల్కనీ మరియు ఖాళీ స్థలం'],
+         a:['మరుగుదొడ్డి లేదా సెప్టిక్ ట్యాంక్','బరువైన సామాను లేదా చెత్త పేరుకుపోవడం','ఎత్తైన వస్తువులతో ఈ ప్రాంతాన్ని అడ్డుకోవడం']},
+        {t:'ఈశాన్యం – ఈశాన',s:'అత్యంత పవిత్రమైన మూల · తత్త్వం: జలం · శివుడు / గురుడు',
+         g:['పూజ గది మరియు ధ్యానం','నీటి వనరు: బావి, ట్యాంక్, ప్యూరిఫైయర్','ప్రధాన ద్వారం','ఖాళీ బాల్కనీ లేదా తోట','తేలికైన, శుభ్రమైన హాలు'],
+         a:['మరుగుదొడ్డి','వంటగది','బరువైన వస్తువులు లేదా మెట్లు','చెత్తబుట్ట లేదా చిందరవందర']},
+        {t:'తూర్పు – ఇంద్రుడు',s:'ఆరోగ్యం, శక్తి, కొత్త ఆరంభాలు · తత్త్వం: సూర్యుడు',
+         g:['ప్రధాన ద్వారం','హాలు','చదువుకునే గది','ఉదయపు ఎండ కోసం పెద్ద కిటికీలు','పిల్లల గది'],
+         a:['మరుగుదొడ్డి','మందపాటి, మూసిన గోడలు','బరువైన సామాను']},
+        {t:'ఆగ్నేయం – అగ్ని',s:'అగ్ని మరియు శక్తి · తత్త్వం: అగ్ని',
+         g:['వంటగది (వండేటప్పుడు తూర్పు వైపు ముఖం)','ఎలక్ట్రికల్ ప్యానెల్ మరియు మీటర్','ఇన్వర్టర్, జనరేటర్, బాయిలర్','గ్యాస్ మరియు వేడి చేసే పరికరాలు'],
+         a:['పడకగది','పూజ గది','నీటి ట్యాంక్ లేదా బోర్‌వెల్','ప్రధాన ద్వారం']},
+        {t:'దక్షిణం – యముడు',s:'స్థిరత్వం మరియు విశ్రాంతి · తత్త్వం: భూమి',
+         g:['పడకగది','బరువైన ఫర్నిచర్ మరియు నిల్వ','మెట్లు','బయట ఎత్తైన చెట్లు'],
+         a:['ప్రధాన ద్వారం','నీటి నిల్వ లేదా బోర్‌వెల్','పూజ గది','పెద్ద కిటికీలు లేదా ఖాళీలు']},
+        {t:'నైరుతి – నిరృతి',s:'స్థిరత్వం మరియు బలం · తత్త్వం: భూమి',
+         g:['మాస్టర్ బెడ్‌రూమ్','బరువైన బీరువా మరియు ఫర్నిచర్','విలువైన వస్తువుల లాకర్','ఆఫీసులో యజమాని సీటు','పైకప్పుపై నీటి ట్యాంక్'],
+         a:['మరుగుదొడ్డి','వంటగది','ప్రధాన ద్వారం','పూజ గది','బోర్‌వెల్ లేదా భూగర్భ నీరు','కత్తిరించిన లేదా లేని మూల']},
+        {t:'పశ్చిమం – వరుణుడు',s:'లాభం మరియు పురోగతి · తత్త్వం: జలం / ఆకాశం',
+         g:['భోజనాల గది','పిల్లల గది మరియు చదువు','మెట్లు','మరుగుదొడ్డి లేదా స్నానాల గది','పైకప్పుపై నీటి ట్యాంక్'],
+         a:['బోర్‌వెల్ లేదా భూగర్భ ట్యాంక్','చాలా ఎక్కువ కిటికీలు, తలుపులు','ప్రధాన ద్వారం (అంత మంచిది కాదు)']},
+        {t:'వాయవ్యం – వాయువు',s:'కదలిక మరియు తోడ్పాటు · తత్త్వం: వాయువు',
+         g:['అతిథి గది','గ్యారేజ్ లేదా వాహనాల పార్కింగ్','ధాన్యం మరియు స్టోర్ రూమ్','మరుగుదొడ్డి లేదా బట్టలు ఉతికే స్థలం','అతిథులు లేదా కుమార్తెల పడకగది'],
+         a:['మాస్టర్ బెడ్‌రూమ్','పూజ గది','నగదు లాకర్']}
+      ]
+    }
+  };
+
+  var lang='te', pinned=null, curIdx=0;
+
+  var NS='http://www.w3.org/2000/svg', rot=$('rot'), labelsG=null;
+  function el(n,a,p){var e=document.createElementNS(NS,n);for(var k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+  function pt(deg,r){var a=deg*Math.PI/180;return [200+r*Math.sin(a),200-r*Math.cos(a)];}
+  function buildStatic(){
+    el('circle',{cx:200,cy:200,r:199,fill:'url(#ring)'},rot);
+    el('circle',{cx:200,cy:200,r:180,fill:'#a51f24',stroke:'#6d1217','stroke-width':2},rot);
+    el('circle',{cx:200,cy:200,r:169,fill:'url(#disc)'},rot);
+    var minor='',major='';
+    for(var d=0;d<360;d+=2){
+      var len=d%10===0?11:5;
+      var p1=pt(d,164),p2=pt(d,164-len),seg='M'+p1[0].toFixed(1)+' '+p1[1].toFixed(1)+'L'+p2[0].toFixed(1)+' '+p2[1].toFixed(1);
+      if(d%10===0)major+=seg; else minor+=seg;
+    }
+    el('path',{d:minor,stroke:'#cfcfd4','stroke-width':.8,fill:'none'},rot);
+    el('path',{d:major,stroke:'#fff','stroke-width':1.6,fill:'none'},rot);
+    for(var n=0;n<360;n+=20){
+      var t=el('text',{x:200,y:58,'text-anchor':'middle','dominant-baseline':'central','font-size':9,fill:'#e4e4e8',transform:'rotate('+n+' 200 200)'},rot);
+      t.textContent=n;
+    }
+    function spoke(a,L,w,light,dark){
+      var g=el('g',{transform:'rotate('+a+' 200 200)'},rot);
+      el('polygon',{points:'200,'+(200-L)+' '+(200-w)+','+(200-w)+' 200,200',fill:light},g);
+      el('polygon',{points:'200,'+(200-L)+' '+(200+w)+','+(200-w)+' 200,200',fill:dark},g);
+    }
+    [45,135,225,315].forEach(function(a){spoke(a,64,11,'#d2d4d9','#74777d');});
+    [0,90,180,270].forEach(function(a){spoke(a,94,15,'url(#sil)','#8a8d93');});
+    el('polygon',{points:'200,110 196.5,142 203.5,142',fill:'#e5262c'},rot);
+    el('polygon',{points:'200,290 196.5,258 203.5,258',fill:'#2b8fd6'},rot);
+    el('circle',{cx:200,cy:200,r:11,fill:'#b8651b',stroke:'#e6e6ea','stroke-width':2},rot);
+    el('circle',{cx:200,cy:200,r:5,fill:'#22c55e'},rot);
+    labelsG=el('g',{},rot);
+  }
+  function buildLabels(){
+    labelsG.textContent='';
+    for(var i=0;i<8;i++){
+      var card=i%2===0, a=i*45, hi=lang==='te';
+      var t=el('text',{x:200,y:200-(card?(hi?124:120):(hi?94:90)),'text-anchor':'middle','dominant-baseline':'central',
+        'font-size':card?(hi?21:26):(hi?15:17),'font-weight':card?700:600,
+        fill:card?'#ffe600':'#b9b81d',transform:'rotate('+a+' 200 200)'},labelsG);
+      t.textContent=NAMES[lang][i];
+      if(hi){ // English direction under the Hindi name
+        var e=el('text',{x:200,y:200-(card?101:75),'text-anchor':'middle','dominant-baseline':'central',
+          'font-size':card?12:10,'font-weight':600,fill:'#e4e4e8',transform:'rotate('+a+' 200 200)'},labelsG);
+        e.textContent=NAMES.en[i];
+      }
+    }
+  }
+  try{lang=localStorage.getItem('compassLangTe')||'te';}catch(e){}
+
+  function li(arr){return arr.map(function(x){var l=document.createElement('li');l.textContent=x;return l.outerHTML;}).join('');}
+
+  function renderChips(){
+    var h='<button data-i="live" class="'+(pinned===null?'on':'')+'">'+VASTU[lang].ui.live+'</button>';
+    for(var i=0;i<8;i++) h+='<button data-i="'+i+'" class="'+(pinned===i?'on':'')+'">'+NAMES[lang][i]+(lang==='te'?'<small>'+NAMES.en[i]+'</small>':'')+'</button>';
+    chips.innerHTML=h;
+  }
+
+  function renderCard(){
+    var i=pinned!==null?pinned:curIdx, V=VASTU[lang], d=V.d[i];
+    $('vTitle').textContent=d.t; $('vSub').textContent=d.s;
+    $('hGood').textContent=V.ui.good; $('hAvoid').textContent=V.ui.avoid;
+    $('vGood').innerHTML=li(d.g); $('vAvoid').innerHTML=li(d.a);
+    $('note').textContent=V.ui.note;
+  }
+
+  chips.addEventListener('click',function(e){
+    var b=e.target.closest('button'); if(!b)return;
+    pinned=(b.dataset.i==='live')?null:parseInt(b.dataset.i,10);
+    renderChips(); renderCard();
+  });
+
+  // Accuracy: level 0..3 (unreliable, low, medium, high), optional error in degrees
+  var acc={level:null,deg:null};
+  function renderAcc(){
+    if(acc.level===null){accEl.textContent='';accEl.className='';return;}
+    var U=VASTU[lang].ui;
+    accEl.textContent=U.acc+': '+U.accL[acc.level]+(acc.deg!==null?' (±'+Math.round(acc.deg)+'°)':'');
+    accEl.className='l'+acc.level;
+  }
+  function setAcc(level,deg){
+    if(acc.level===level&&acc.deg===deg)return;
+    acc.level=level;acc.deg=deg;renderAcc();
+  }
+  // Android hook: webView.evaluateJavascript("setAccuracy(" + SensorManager.SENSOR_STATUS_* + ")", null)
+  window.setAccuracy=function(level){
+    if(typeof level!=='number'||isNaN(level))return;
+    setAcc(Math.max(0,Math.min(3,Math.round(level))),null);
+  };
+  var msgKey='';
+  function setMsg(k){msgKey=k;msg.textContent=k?VASTU[lang].ui[k]:'';}
+
+  function applyLang(){
+    document.documentElement.lang=lang;
+    buildLabels(); setMsg(msgKey); renderAcc();
+    renderChips(); renderCard(); update();
+  }
+
+  var target=0, shown=0, hasData=false;
+  var norm=function(a){return (a%360+360)%360;};
+
+  // Android hook: webView.evaluateJavascript("setHeading(123.4)", null)
+  window.setHeading=function(deg){
+    if(typeof deg!=='number'||isNaN(deg))return;
+    if(!hasData){hasData=true;shown=norm(deg);setMsg('');}
+    target=norm(deg);
+  };
+
+  function headingFrom(alpha,beta,gamma){
+    var d=Math.PI/180,a=alpha*d,b=beta*d,g=gamma*d;
+    var cA=Math.cos(a),sA=Math.sin(a),sB=Math.sin(b),cG=Math.cos(g),sG=Math.sin(g);
+    var rA=-cA*sG-sA*sB*cG, rB=-sA*sG+cA*sB*cG;
+    var h=Math.atan(rA/rB);
+    if(rB<0)h+=Math.PI; else if(rA<0)h+=2*Math.PI;
+    return norm(h/d);
+  }
+
+  var gotAbsolute=false;
+  function onOrient(e){
+    var h=null;
+    if(typeof e.webkitCompassHeading==='number'){
+      h=e.webkitCompassHeading;
+      if(typeof e.webkitCompassAccuracy==='number'){
+        var ad=e.webkitCompassAccuracy; // degrees; negative = invalid / needs calibration
+        if(ad<0) setAcc(0,null); else setAcc(ad<=15?3:(ad<=30?2:1),ad);
+      }
+    }
+    else if(e.alpha!=null){
+      if(e.type==='deviceorientationabsolute'||e.absolute===true){ gotAbsolute=true; }
+      else if(gotAbsolute){ return; }
+      h=(e.beta!=null&&e.gamma!=null)?headingFrom(e.alpha,e.beta,e.gamma):norm(360-e.alpha);
+    }
+    if(h!=null)window.setHeading(h);
+  }
+
+  var running=false;
+  function listen(){
+    window.addEventListener('deviceorientationabsolute',onOrient,true);
+    window.addEventListener('deviceorientation',onOrient,true);
+    running=true; setMsg('hold');
+    setTimeout(function(){ if(running&&!hasData) setMsg('nodata'); },2500);
+  }
+  function start(){
+    if(window.DeviceOrientationEvent&&typeof DeviceOrientationEvent.requestPermission==='function'){
+      DeviceOrientationEvent.requestPermission().then(function(r){
+        if(r==='granted')listen(); else setMsg('denied');
+      }).catch(function(){setMsg('permErr');});
+    } else listen();
+  }
+
+  function update(){
+    degEl.textContent=(Math.round(shown)%360)+'°';
+    var idx=Math.round(shown/45)%8;
+    dirEl.textContent=lang==='te'?NAMES.te[idx]+' · '+NAMES.en[idx]:NAMES.en[idx];
+    rot.setAttribute('transform','rotate('+(-shown)+' 200 200)');
+    if(idx!==curIdx){curIdx=idx; if(pinned===null)renderCard();}
+  }
+
+  (function loop(){
+    var diff=((target-shown+540)%360)-180;
+    if(Math.abs(diff)>0.05){ shown=norm(shown+diff*0.18); update(); }
+    requestAnimationFrame(loop);
+  })();
+
+  langBtn.onclick=function(){
+    lang=(lang==='en')?'te':'en';
+    try{localStorage.setItem('compassLangTe',lang);}catch(e){}
+    applyLang();
+  };
+
+  buildStatic();applyLang();
+  if(window.DeviceOrientationEvent&&typeof DeviceOrientationEvent.requestPermission==='function'){
+    // iOS needs a user gesture to grant sensor access: first tap anywhere enables it
+    setMsg('tap');
+    document.addEventListener('click',function once(e){
+      if(e.target.closest('button'))return;
+      document.removeEventListener('click',once); start();
+    });
+  } else { start(); }
+})();
+</script>
+</body>
+</html>
